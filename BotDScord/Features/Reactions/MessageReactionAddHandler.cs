@@ -2,7 +2,7 @@ using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 using NetCord.Rest;
 
-namespace BotDScord;
+namespace BotDScord.Features.Reactions;
 
 public class MessageReactionAddHandler(RestClient client) : IMessageReactionAddGatewayHandler
 {

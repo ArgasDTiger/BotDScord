@@ -1,7 +1,7 @@
 using NetCord.Gateway;
 using NetCord.Gateway.Voice;
 
-namespace BotDScord;
+namespace BotDScord.Features.Voice.Services;
 
 public interface IVoiceClientHandler
 {

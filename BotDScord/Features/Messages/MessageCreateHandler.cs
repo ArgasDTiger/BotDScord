@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using NetCord.Gateway;
 using NetCord.Hosting.Gateway;
 
-namespace BotDScord;
+namespace BotDScord.Features.Messages;
 
 public sealed class MessageCreateHandler(ILogger<MessageCreateHandler> logger) : IMessageCreateGatewayHandler
 {

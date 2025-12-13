@@ -4,7 +4,7 @@ using NetCord.Gateway;
 using NetCord.Gateway.Voice;
 using NetCord.Logging;
 
-namespace BotDScord;
+namespace BotDScord.Features.Voice.Services;
 
 public sealed class VoiceClientHandler : IVoiceClientHandler
 {

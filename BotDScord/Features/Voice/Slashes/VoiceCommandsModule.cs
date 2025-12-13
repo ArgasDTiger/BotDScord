@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using BotDScord.Features.Voice.Services;
 using Microsoft.Extensions.Logging;
 using NetCord;
 using NetCord.Gateway.Voice;
@@ -7,7 +8,7 @@ using NetCord.Services.ApplicationCommands;
 using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 
-namespace BotDScord;
+namespace BotDScord.Features.Voice.Slashes;
 
 public sealed class VoiceCommandsModule : ApplicationCommandModule<ApplicationCommandContext>
 {
