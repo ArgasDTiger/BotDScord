@@ -17,6 +17,9 @@ builder.Services
     .AddApplicationCommands();
 
 builder.Services.AddSingleton<IVoiceClientHandler, VoiceClientHandler>();
+builder.Services.AddSingleton<ISongQueuer, SongQueuer>();
+builder.Services.AddSingleton<IMusicPlayer, MusicPlayer>();
+builder.Services.AddSingleton<IAudioStreamer, AudioStreamer>();
 
 var host = builder.Build();
 

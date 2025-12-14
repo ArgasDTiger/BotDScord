@@ -1,8 +1,8 @@
 using System.Diagnostics;
+using BotDScord.Features.Voice.Models;
 using BotDScord.Features.Voice.Services;
 using Microsoft.Extensions.Logging;
 using NetCord;
-using NetCord.Gateway.Voice;
 using NetCord.Rest;
 using NetCord.Services.ApplicationCommands;
 using YoutubeExplode;
@@ -13,12 +13,20 @@ namespace BotDScord.Features.Voice.Slashes;
 public sealed class VoiceCommandsModule : ApplicationCommandModule<ApplicationCommandContext>
 {
     private readonly ILogger<VoiceCommandsModule> _logger;
-    private readonly IVoiceClientHandler _voiceClientHandler;
+    private readonly IVoiceClientHandler _voiceClientHandler; 
+    private readonly ISongQueuer _songQueuer;
+    private readonly IMusicPlayer _musicPlayer;
 
-    public VoiceCommandsModule(ILogger<VoiceCommandsModule> logger, IVoiceClientHandler voiceClientHandler)
+    public VoiceCommandsModule(
+        ILogger<VoiceCommandsModule> logger,
+        IVoiceClientHandler voiceClientHandler,
+        ISongQueuer songQueuer,
+        IMusicPlayer musicPlayer)
     {
         _logger = logger;
         _voiceClientHandler = voiceClientHandler;
+        _songQueuer = songQueuer;
+        _musicPlayer = musicPlayer;
     }
 
     [SlashCommand("play", "Plays music from YouTube", Contexts = [InteractionContextType.Guild])]
@@ -59,84 +67,40 @@ public sealed class VoiceCommandsModule : ApplicationCommandModule<ApplicationCo
         }
 
         // TODO: handle exception
-        var streamInfo = await GetYoutubeAudioStream(youtubeUrl);
+        var youtubeResult = await GetYoutubeAudioStream(youtubeUrl);
 
-        if (streamInfo is null)
+        if (youtubeResult.TryPickT1(out var youtubeError, out var songInfo))
         {
-            await FollowupAsync(new InteractionMessageProperties { Content = "Failed to get audio from YouTube!" });
+            await RespondAsync(InteractionCallback.Message(youtubeError.Message));
             return;
         }
 
-        await FollowupAsync(new InteractionMessageProperties() { Content = "Playing from YouTube!" });
+        var songQueueInfo = youtubeResult.AsT0!;
 
-        var outStream = voiceClient.CreateOutputStream();
-        OpusEncodeStream opusStream = new(outStream, PcmFormat.Short, VoiceChannels.Stereo, OpusApplication.Audio);
+        _songQueuer.QueueSong(guild.Id, songQueueInfo);
+        await FollowupAsync(new InteractionMessageProperties
+            { Content = $"Queued {songInfo.Video.Title} by {songInfo.Video.Author}" });
 
-        await StreamYoutubeAudioAsync(streamInfo, opusStream);
-
-        await opusStream.FlushAsync();
+        if (voiceClient.IsNewClient)
+        {
+            _ = _musicPlayer.PlayQueue(guild, voiceClient.VoiceClient);
+        }
     }
 
-    private async Task<IStreamInfo?> GetYoutubeAudioStream(string youtubeUrl)
+    private async Task<OneOf<SongQueueInfo, Error>> GetYoutubeAudioStream(string youtubeUrl)
     {
         try
         {
             var youtube = new YoutubeClient();
+            var video = await youtube.Videos.GetAsync(youtubeUrl);
             var streamManifest = await youtube.Videos.Streams.GetManifestAsync(youtubeUrl);
-            return streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+            IStreamInfo streamInfo = streamManifest.GetAudioOnlyStreams().GetWithHighestBitrate();
+            return new SongQueueInfo(streamInfo, video);
         }
         catch (Exception ex)
         {
             _logger.LogWarning("[YoutubeExplode] Error: {Message}", ex.Message);
-            return null;
+            return new Error("Failed to get audio from YouTube.");
         }
-    }
-
-    private async Task StreamYoutubeAudioAsync(IStreamInfo streamInfo, OpusEncodeStream opusStream)
-    {
-        ProcessStartInfo startInfo = new("ffmpeg")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        var arguments = startInfo.ArgumentList;
-
-        arguments.Add("-reconnect");
-        arguments.Add("1");
-        arguments.Add("-reconnect_streamed");
-        arguments.Add("1");
-        arguments.Add("-reconnect_delay_max");
-        arguments.Add("5");
-        arguments.Add("-i");
-        arguments.Add(streamInfo.Url);
-
-        arguments.Add("-loglevel");
-        arguments.Add("error");
-        arguments.Add("-ac");
-        arguments.Add("2");
-        arguments.Add("-f");
-        arguments.Add("s16le");
-        arguments.Add("-ar");
-        arguments.Add("48000");
-        arguments.Add("pipe:1");
-
-        _logger.LogDebug("[FFmpeg] Starting stream...");
-        var ffmpeg = Process.Start(startInfo)!;
-
-        _ = Task.Run(async () =>
-        {
-            string errors = await ffmpeg.StandardError.ReadToEndAsync();
-            if (!string.IsNullOrEmpty(errors))
-            {
-                _logger.LogWarning("[FFmpeg] Error: {Error}", errors);
-            }
-        });
-
-        await ffmpeg.StandardOutput.BaseStream.CopyToAsync(opusStream);
-
-        _logger.LogDebug("[FFmpeg] Stream has completed.");
     }
 }
